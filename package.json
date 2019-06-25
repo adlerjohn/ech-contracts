@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "ethers": "4.0.0",
+    "ganache-cli": "6.4.4",
+    "openzeppelin-solidity": "2.3.0",
+    "truffle": "5.0.24"
+  }
+}
