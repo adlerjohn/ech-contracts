@@ -11,7 +11,7 @@ library MerkleProof256 {
     /// @param leaf Leaf of verify.
     /// @return True is the proof is valid, false otherwise.
     function verify(bytes32[] memory proof, uint256 directions, bytes32 root, bytes32 leaf) internal pure returns (bool) {
-        assert(proof.length <= 256);
+        require(proof.length <= 256);
 
         bytes32 computedHash = leaf;
 
