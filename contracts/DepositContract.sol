@@ -17,12 +17,18 @@ contract DepositContract  {
         bytes32 txRoot;
     }
 
+    struct ExitWitness {
+        bytes32 witness_r;
+        bytes32 witness_s;
+        byte witness_v;
+    }
+
     struct ExitTransaction {
         address from;
         uint256 amount;
         address color;
         uint64 nonce;
-        bytes witness;
+        ExitWitness witness;
     }
 
     uint256 constant public BOND_SIZE = 1 ether;
