@@ -3,11 +3,10 @@ pragma solidity ^0.5.8;
 pragma experimental ABIEncoderV2;
 
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
 import "contracts/libs/MerkleProof256.sol";
 
-contract DepositContract is Ownable {
+contract DepositContract  {
     using SafeMath for uint64;
     using SafeMath for uint256;
 
