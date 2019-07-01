@@ -72,12 +72,17 @@ contract DepositContract  {
         // TODO implement
 
         // Double-spending output within block
+        // Two transactions included at fraudAtHeight spend the same input
 
         // Invalid witness for tx
+        // A transaction included at fraudAtHeight has witness pubkey != output owner
 
         // Invalid amounts in/out for tx
+        // A transaction included at fraudAtHeight has outputs > inputs
 
         // Spending non-existent output
+        // An input to a transaction included at fraudAtHeight is excluded from state at fraudAtHeight
+        //  TODO also excluded from outputs at fraudAtHeight?
 
         return false;
     }
