@@ -8,7 +8,6 @@ import "contracts/libs/MerkleProof256.sol";
 
 contract DepositContract  {
     using SafeMath for uint64;
-    using SafeMath for uint256;
 
     struct BlockHeader {
         bytes32 prev;
@@ -35,11 +34,12 @@ contract DepositContract  {
     uint256 constant public FINALIZATION_DELAY = 6000; // ~ 1 day
     address constant public ZERO_ADDRESS = 0x0000000000000000000000000000000000000000;
 
-    event Deposit(address from, uint256 amount, address color);
+    event Deposit(address from, uint256 amount, address color, uint256 nonce);
 
     bytes32[] public s_blockHashes;
-    uint64 public s_tipHeight;
-    uint256 public s_tipEthereumHeight;
+    uint64 public s_tipHeight = 0;
+    uint256 public s_tipEthereumHeight = 0;
+    uint256 public s_depositNonce = 0;
 
     mapping(uint64 => mapping(bytes32 => bool)) public unspentExitsAtBlock;
     mapping(uint256 => bytes32[]) public unspentExitsNotFinalized;
@@ -52,8 +52,10 @@ contract DepositContract  {
         return keccak256(abi.encodePacked(t.from, t.amount, t.color, t.nonce));
     }
 
-    function validateFraudProof(bytes32 blockHash, bytes memory proof) internal pure returns (bool) {
+    function validateFraudProof(uint64 fraudAtHeight, bytes memory proof) internal view returns (bool) {
         require(proof.length > 0);
+
+        bytes32 blockHash = s_blockHashes[fraudAtHeight];
 
         // TODO implement
 
@@ -70,7 +72,7 @@ contract DepositContract  {
 
         // Check fraud proof, if any
         if (fraudAtHeight > 0 && fraudAtHeight <= s_tipHeight) {
-            require(validateFraudProof(s_blockHashes[fraudAtHeight], fraudProof));
+            require(validateFraudProof(fraudAtHeight, fraudProof));
 
             // Reset unspent exits if proof valid
             // TODO how much gas does this use?
@@ -87,9 +89,11 @@ contract DepositContract  {
         }
         require(header.height == s_blockHashes.length);
 
-        // Merkleize transactions
+        // Merkleize transactions and check against tx root
         // TODO add exit transactions to unspentExits
+        bytes32 txRoot;
         bytes32[] memory unspentExits;
+        require(header.txRoot == txRoot);
 
         // If all checks pass, make the new block the tip
         bytes32 blockHash = computeBlockHeaderHash(header);
@@ -103,8 +107,7 @@ contract DepositContract  {
     }
 
     function deposit() external payable {
-        // TODO implement
-        emit Deposit(msg.sender, msg.value, ZERO_ADDRESS);
+        emit Deposit(msg.sender, msg.value, ZERO_ADDRESS, s_depositNonce++);
     }
 
     function exit(uint64 blockHeight, ExitTransaction calldata exitTransaction) external {
