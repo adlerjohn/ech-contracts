@@ -3,6 +3,7 @@ pragma solidity ^0.5.8;
 pragma experimental ABIEncoderV2;
 
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
+import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 
 import "contracts/libs/MerkleProof256.sol";
 
@@ -33,6 +34,7 @@ contract DepositContract  {
     struct ExitTransaction {
         address payable from;
         uint256 amount;
+        bool isColored;
         address color;
         uint64 nonce;
         ExitWitness witness;
@@ -211,16 +213,23 @@ contract DepositContract  {
     }
 
     function deposit() external payable {
-        // TODO allow tokens
         bytes32 depositID = computeDepositID(msg.sender, msg.value, ZERO_ADDRESS, s_depositNonce);
         unspentDepositsAtEthereumBlock[block.number][depositID] = true;
 
         emit Deposit(msg.sender, msg.value, ZERO_ADDRESS, s_depositNonce++);
     }
 
+    function depositTokens(address tokenContract, uint256 value) external {
+        require(IERC20(tokenContract).transferFrom(msg.sender, address(this), value));
+
+        bytes32 depositID = computeDepositID(msg.sender, value, tokenContract, s_depositNonce);
+        unspentDepositsAtEthereumBlock[block.number][depositID] = true;
+
+        emit Deposit(msg.sender, value, tokenContract, s_depositNonce++);
+    }
+
     function exit(uint256 height, ExitTransaction calldata exitTransaction) external {
-        // TODO remove and allow tokens
-        require(exitTransaction.color == ZERO_ADDRESS);
+        require(exitTransaction.isColored == false);
         require(height <= s_tipHeight);
         require(!s_commitments[height].isNotFinalized);
 
@@ -232,5 +241,20 @@ contract DepositContract  {
 
         // Withdraw funds
         exitTransaction.from.transfer(exitTransaction.amount);
+    }
+
+    function exitTokens(uint256 height, ExitTransaction calldata exitTransaction) external {
+        require(exitTransaction.isColored == true);
+        require(height <= s_tipHeight);
+        require(!s_commitments[height].isNotFinalized);
+
+        bytes32 exitTransactionID = computeExitTransactionID(exitTransaction);
+        require(unspentExitsAtBlock[height][exitTransactionID]);
+
+        // Remove exit from unspent exits
+        unspentExitsAtBlock[height][exitTransactionID] = false;
+
+        // Withdraw funds
+        IERC20(exitTransaction.color).transfer(exitTransaction.from, exitTransaction.amount);
     }
 }
