@@ -42,6 +42,8 @@ contract DepositContract  {
     uint256 constant public FINALIZATION_DELAY = 6000; // ~ 1 day
     address constant public ZERO_ADDRESS = address(0);
 
+    enum FraudType { DoubleSpend, InvalidWitness, InvalidAmounts, SpendNonOutput }
+
     event Deposit(address from, uint256 amount, address color, uint256 nonce);
 
     BlockCommitment[] public s_commitments;
@@ -69,20 +71,70 @@ contract DepositContract  {
 
         bytes32 blockHash = s_commitments[fraudAtHeight].hash;
 
-        // TODO implement
+        // Parse fraud proof
+        uint256 offset = 0;
 
-        // Double-spending output within block
-        // Two transactions included at fraudAtHeight spend the same input
+        // First byte is the fraud type
+        FraudType fraudType = FraudType(uint8(proof[offset++] & 0xff));
 
-        // Invalid witness for tx
-        // A transaction included at fraudAtHeight has witness pubkey != output owner
+        if (fraudType == FraudType.DoubleSpend) {
+            // Double-spending output within block
+            // Two transactions included at fraudAtHeight spend the same input
 
-        // Invalid amounts in/out for tx
-        // A transaction included at fraudAtHeight has outputs > inputs
+            // Tx 1
 
-        // Spending non-existent output
-        // An input to a transaction included at fraudAtHeight is excluded from state at fraudAtHeight
-        //  TODO also excluded from outputs at fraudAtHeight?
+            // Inclusion proof 1
+
+            // Input index 1
+
+            // Tx 2
+
+            // Inclusion proof 2
+
+            // Input index 2
+
+            // Check: input at index 1 == input at index 2
+        } else if (fraudType == FraudType.InvalidWitness) {
+            // Invalid witness for tx
+            // A transaction included at fraudAtHeight has witness pubkey != output owner
+
+            // Tx
+
+            // Inclusion proof
+
+            // Witness index
+
+            // Input index
+
+            // Check: witness pubkey != input at index owner
+        } else if (fraudType == FraudType.InvalidAmounts) {
+            // Invalid amounts in/out for tx
+            // A transaction included at fraudAtHeight has outputs > inputs
+
+            // Tx
+
+            // Inclusion proof
+
+            // Check: amounts out > amounts in
+        } else if (fraudType == FraudType.SpendNonOutput) {
+            // Spending non-existent output
+            // An input to a transaction included at fraudAtHeight is excluded from state at fraudAtHeight
+            //  TODO also excluded from outputs at fraudAtHeight?
+
+            // Tx
+
+            // Inclusion proof
+
+            // Input index
+
+            // State
+
+            // Exclusion proof
+
+            // Check: input at index == excluded state
+        } else {
+            revert();
+        }
 
         return false;
     }
