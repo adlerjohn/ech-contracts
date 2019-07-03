@@ -290,9 +290,9 @@ library BytesLib {
         return tempBytes;
     }
 
-    function toAddress(bytes memory _bytes, uint _start) internal  pure returns (address) {
+    function toAddress(bytes memory _bytes, uint _start) internal  pure returns (address payable) {
         require(_bytes.length >= (_start + 20));
-        address tempAddress;
+        address payable tempAddress;
 
         assembly {
             tempAddress := div(mload(add(add(_bytes, 0x20), _start)), 0x1000000000000000000000000)
@@ -367,7 +367,7 @@ library BytesLib {
         return tempUint;
     }
 
-    function toUint(bytes memory _bytes, uint _start) internal  pure returns (uint256) {
+    function toUint256(bytes memory _bytes, uint _start) internal  pure returns (uint256) {
         require(_bytes.length >= (_start + 32));
         uint256 tempUint;
 
