@@ -89,27 +89,60 @@ contract DepositContract  {
     }
 
     function parseTxFromProof(bytes memory proof, uint256 offset) internal pure returns (Transaction memory, uint256) {
-        // TODO implement
-        Transaction memory t;
-        return (t, 0);
+        address payable from = BytesLib.toAddress(proof, offset);
+        offset += 20;
+        address to = BytesLib.toAddress(proof, offset);
+        offset += 20;
+        uint256 amount = BytesLib.toUint256(proof, offset);
+        offset += 32;
+        bool isColored = (BytesLib.toUint8(proof, offset) == 1);
+        offset++;
+        uint256 fee = BytesLib.toUint256(proof, offset);
+        offset += 32;
+        uint64 nonce = BytesLib.toUint64(proof, offset);
+        offset += 8;
+        bytes32 data = BytesLib.toBytes32(proof, offset);
+        offset += 32;
+        bytes32 r = BytesLib.toBytes32(proof, offset);
+        offset += 32;
+        bytes32 s = BytesLib.toBytes32(proof, offset);
+        offset == 32;
+        uint8 v = BytesLib.toUint8(proof, offset);
+        offset++;
+
+        Transaction memory t = Transaction(from, to, amount, isColored, fee, nonce, data, Witness(r, s, v));
+        return (t, offset);
     }
 
     function parseMerkleProofFromProof(bytes memory proof, uint256 offset) internal pure returns (bytes32[] memory, uint256, uint256) {
-        // TODO implement
-        bytes32[] memory merkleProof;
-        uint256 directions;
-        return (merkleProof, directions, 0);
+        uint16 len = BytesLib.toUint8(proof, offset);
+        offset += 2;
+
+        require(len <= 256);
+
+        bytes32[] memory merkleProof = new bytes32[](len);
+        for (uint16 i = 0; i < len; i++) {
+            merkleProof[i] = (BytesLib.toBytes32(proof, offset));
+            offset += 32;
+        }
+        uint256 directions = BytesLib.toUint256(proof, offset);
+        offset += 32;
+
+        return (merkleProof, directions, offset);
     }
 
     function parseStateElementFromProof(bytes memory proof, uint256 offset) internal pure returns (StateElement memory, uint256) {
-        // TODO implement
-        StateElement memory e;
-        return (e, 0);
+        uint256 balance = BytesLib.toUint256(proof, offset);
+        offset += 32;
+        uint256 balanceToken = BytesLib.toUint256(proof, offset);
+        offset += 32;
+
+        StateElement memory e = StateElement(balance, balanceToken);
+        return (e, offset);
     }
 
     function validateFraudProof(uint256 fraudAtHeight, BlockHeader memory header, bytes memory proof) internal view returns (bool) {
         require(proof.length > 0);
-
         require(computeBlockHeaderHash(header) == s_commitments[fraudAtHeight].hash);
 
         // Parse fraud proof
@@ -123,7 +156,7 @@ contract DepositContract  {
             // A transaction included at fraudAtHeight is malformed
 
             // Length of tx
-            uint256 len = BytesLib.toUint(proof, offset);
+            uint256 len = BytesLib.toUint256(proof, offset);
             offset += 32;
 
             // Tx bytes
