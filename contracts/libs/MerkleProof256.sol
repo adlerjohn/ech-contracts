@@ -14,10 +14,11 @@ library MerkleProof256 {
         require(proof.length <= 256);
 
         bytes32 computedHash = leaf;
+        uint256 len = proof.length - 1;
 
-        for (uint256 i = 0; i < proof.length; i++) {
+        for (uint256 i = 0; i <= len; i++) {
             bytes32 proofElement = proof[i];
-            bool isLeft = directions & (1 << i) == 1;
+            bool isLeft = directions & (1 << (len - i)) == 1;
 
             if (isLeft) {
                 computedHash = keccak256(abi.encodePacked(proofElement, computedHash));
