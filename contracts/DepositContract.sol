@@ -6,6 +6,7 @@ import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 
+import "contracts/libs/BytesLib.sol";
 import "contracts/libs/MerkleProof256.sol";
 
 contract DepositContract  {
@@ -115,24 +116,18 @@ contract DepositContract  {
         uint256 offset = 0;
 
         // First byte is the fraud type
-        FraudType fraudType = FraudType(uint8(proof[offset++]));
+        FraudType fraudType = FraudType(BytesLib.toUint8(proof, offset++));
 
         if (fraudType == FraudType.MalformedTx) {
             // A transaction isn't properly formed
             // A transaction included at fraudAtHeight is malformed
 
             // Length of tx
-            uint256 len;
-            assembly {
-                len := mload(add(proof, add(0x20, offset)))
-            }
+            uint256 len = BytesLib.toUint(proof, offset);
             offset += 32;
 
             // Tx bytes
-            bytes memory txBytes;
-            assembly {
-                txBytes := mload(add(proof, add(len, offset)))
-            }
+            bytes memory txBytes = BytesLib.slice(proof, offset, len);
             offset += len;
 
             // Inclusion proof
