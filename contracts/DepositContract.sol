@@ -36,6 +36,7 @@ contract DepositContract  {
 
     // Support only a single token for now
     struct StateElement {
+        address account;
         uint256 balance;
         uint256 balanceToken;
         uint256 nonce;
@@ -161,6 +162,8 @@ contract DepositContract  {
     }
 
     function parseStateElementFromProof(bytes memory proof, uint256 offset) internal pure returns (StateElement memory, uint256) {
+        address account = BytesLib.toAddress(proof, offset);
+        offset += 20;
         uint256 balance = BytesLib.toUint256(proof, offset);
         offset += 32;
         uint256 balanceToken = BytesLib.toUint256(proof, offset);
@@ -168,7 +171,7 @@ contract DepositContract  {
         uint256 nonce = BytesLib.toUint256(proof, offset);
         offset += 32;
 
-        StateElement memory e = StateElement(balance, balanceToken, nonce);
+        StateElement memory e = StateElement(account, balance, balanceToken, nonce);
         return (e, offset);
     }
 
@@ -200,6 +203,10 @@ contract DepositContract  {
             uint256 directions1;
             uint256 directions2;
 
+            ///
+            /// Parse proof and sanity checks
+            ///
+
             // Tx
             Transaction memory t;
             (t, offset) = parseTxFromProof(proof, offset);
@@ -210,8 +217,23 @@ contract DepositContract  {
             offset += 32;
 
             // Inclusion proof: pre state root
-            (result, , offset) = verifyInclusionProof(proof, offset, header.intermediateStateRootRoot, tempRoot);
+            (result, directions1, offset) = verifyInclusionProof(proof, offset, header.intermediateStateRootRoot, tempRoot);
             if (!result) {
+                return false;
+            }
+
+            // Post state root
+            tempRoot = BytesLib.toBytes32(proof, offset);
+            offset += 32;
+
+            // Inclusion proof: post state root
+            (result, directions2, offset) = verifyInclusionProof(proof, offset, header.intermediateStateRootRoot, tempRoot);
+            if (!result) {
+                return false;
+            }
+
+            // Check directions adjacent
+            if (directions1.add(1) != directions2) {
                 return false;
             }
 
@@ -225,28 +247,27 @@ contract DepositContract  {
                 return false;
             }
 
-            // Pre state to
-            StateElement memory e_preTo;
-            (e_preTo, offset) = parseStateElementFromProof(proof, offset);
-
-            // Inclusion proof: pre state to
-            (result, directions2, offset) = verifyInclusionProof(proof, offset, tempRoot, computeStateElementHash(e_preTo));
-            if (!result) {
-                return false;
-            }
-
-            // TODO check directions adjacent
-
-            // Inclusion proof: post state root
-            tempRoot = BytesLib.toBytes32(proof, offset);
-            offset += 32;
-
             // Post state from
             StateElement memory e_postFrom;
             (e_postFrom, offset) = parseStateElementFromProof(proof, offset);
 
             // Inclusion proof: post state from
             (result, directions1, offset) = verifyInclusionProof(proof, offset, tempRoot, computeStateElementHash(e_postFrom));
+            if (!result) {
+                return false;
+            }
+
+            // Check pre from == post from
+            if (e_preFrom.account != e_postFrom.account) {
+                return false;
+            }
+
+            // Pre state to
+            StateElement memory e_preTo;
+            (e_preTo, offset) = parseStateElementFromProof(proof, offset);
+
+            // Inclusion proof: pre state to
+            (result, directions2, offset) = verifyInclusionProof(proof, offset, tempRoot, computeStateElementHash(e_preTo));
             if (!result) {
                 return false;
             }
@@ -261,25 +282,55 @@ contract DepositContract  {
                 return false;
             }
 
-            // TODO check directions adjacent
-
-            // Check nonce
-            if (e_preFrom.nonce.add(1) != t.data.nonce || e_postFrom.nonce != t.data.nonce) {
-                return true;
+            // Check pre to == post to
+            if (e_preTo.account != e_postTo.account) {
+                return false;
             }
 
-            // Check witness
-            address a = ecrecover(ECDSA.toEthSignedMessageHash(txID), t.witness.v, t.witness.r, t.witness.s);
-            if (a != t.data.from) {
-                return true;
-            }
+            ///
+            /// Validate state transition
+            ///
 
-            // Check amounts
-//            if (!t.isColored && t.amount.add(t.fee) > e.balance ||
-//                 t.isColored && (t.fee > e.balance || t.amount > e.balanceToken)
-//            ) {
-//                return true;
-//            }
+            if (t.data.from != e_preFrom.account || t.data.to != e_preTo.account) {
+                // Check touched accounts for transaction
+                if (computeStateElementHash(e_preFrom) != computeStateElementHash(e_postFrom) && computeStateElementHash(e_preTo) != computeStateElementHash(e_postTo)) {
+                    return true;
+                }
+            } else {
+                // Check nonce
+                if (e_preFrom.nonce.add(1) != t.data.nonce || e_postFrom.nonce != t.data.nonce) {
+                    return true;
+                }
+
+                // Check witness
+                address a = ecrecover(ECDSA.toEthSignedMessageHash(txID), t.witness.v, t.witness.r, t.witness.s);
+                if (a != t.data.from) {
+                    return true;
+                }
+
+                // Check amounts in transaction
+                if (!t.data.isColored) {
+                    uint256 paid = t.data.amount + t.data.fee;
+                    if (paid < t.data.amount || // no overflow on fees
+                        e_preFrom.balance - paid > e_preFrom.balance || // no underflow on paid
+                        e_preTo.balance + t.data.amount < e_preTo.balance || // no overflow on paid
+                        e_preFrom.balance - paid != e_postFrom.balance || // correct debit
+                        e_preTo.balance + t.data.amount != e_postTo.balance // correct credit
+                    ) {
+                        return true;
+                    }
+                } else {
+                    if (e_preFrom.balance - t.data.fee > e_preFrom.balance || // no underflow on fees
+                        e_preFrom.balanceToken - t.data.amount > e_preFrom.balanceToken || // no underflow on paid
+                        e_preTo.balanceToken + t.data.amount < e_preTo.balanceToken || // no overflow on paid
+                        e_preFrom.balance - t.data.fee != e_postFrom.balance || // correct fees
+                        e_preFrom.balanceToken - t.data.amount != e_postFrom.balanceToken || // correct debit
+                        e_preTo.balanceToken + t.data.amount != e_postTo.balanceToken // correct credit
+                    ) {
+                        return true;
+                    }
+                }
+            }
         } else if (fraudType == FraudType.InvalidCollectedFee) {
             // Block producer collected too many fees
             // Fee collected is more than the sum of fees paid
